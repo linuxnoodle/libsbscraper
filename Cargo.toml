@@ -1,5 +1,5 @@
 [package]
-name = "rusty-scraper"
+name = "libsbscraper"
 version = "0.1.0"
 edition = "2021"
 
