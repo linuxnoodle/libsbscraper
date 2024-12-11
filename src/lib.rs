@@ -1,3 +1,5 @@
+se std::collections::HashSet;
+use std::io::Write;
 use reqwest::blocking::Client;
 use scraper::{Html, Selector};
 use rss::Channel;
@@ -38,7 +40,7 @@ fn get_rss(rss_url: &str) -> Result<Channel, Box<dyn std::error::Error>> {
     let client = Client::builder().build()?;
     let response = client.get(rss_url).send()?.text()?;
     if response.is_empty() {
-        return Err("Spacebattles provided no response to RSS feed inquiry".into());
+        return Err(format!("Spacebattles returned empty response to URL: {}", rss_url).into());
     }
 
     let channel = Channel::read_from(response.as_bytes())?;
@@ -52,25 +54,22 @@ fn get_rss(rss_url: &str) -> Result<Channel, Box<dyn std::error::Error>> {
 
 fn scrape_sb_post_text(post_url: &str) -> Result<String, Box<dyn std::error::Error>> {
     let post_regex = Regex::new(r"post-[0-9]+$").unwrap();
-    let post_id = format!("#json-{}", post_regex.find(post_url).unwrap().as_str());
-
-    dbg_println!("Post ID: {}", post_id);
+    let post_id = format!(
+        "#js-{} \
+        > div \
+        > div.message-cell.message-cell--main \
+        > div \
+        > div \
+        > div \
+        > article \
+        > div:nth-child(1) \
+        > div", post_regex.find(post_url).unwrap().as_str());
 
     let client = Client::builder().build()?;
     let response = client.get(post_url).send()?.text()?;
     let document = Html::parse_document(&response);
 
-    let post = document.select(&Selector::parse(&post_id).unwrap()).next().unwrap();
-
-    // Painful
-    let bbwrapper = post.select(&Selector::parse(
-            ".message-inner\
-            .message-cell message-cell--main\
-            .message-main js-quickEditTarget\
-            .message-attribution message-attribution--split\
-            .message-content  js-messageContent\
-            .message-userContent lbContainer js-lbContainer\
-            .message-body js-selectToQuote .bbWrapper").unwrap()).next().unwrap();
+    let bbwrapper = document.select(&Selector::parse(&post_id).unwrap()).next().unwrap();
 
     dbg_println!("Post Text: {}", bbwrapper.inner_html());
     Ok(bbwrapper.inner_html())
@@ -122,7 +121,7 @@ impl SBStoryUtils for SBStory {
             let title = item.title().unwrap();
             let url = item.link().unwrap();
             let pub_date = item.pub_date().unwrap();
-            let text = item.description().unwrap();
+            let text = scrape_sb_post_text(url)?;
             threadmarks.push(Threadmark {
                 title: title.to_string(),
                 url: url.to_string(),
@@ -148,7 +147,19 @@ mod tests {
         let post_text = scrape_sb_post_text(post_url).unwrap();
         assert_eq!(post_text.is_empty(), false);
     }
-    /*#[test]
+    #[test]
+    fn test_sb_post_scraping_2(){
+        let post_url = "https://forums.spacebattles.com/threads/omnissiah-vult-a-story-of-ashes-and-empire-wh40k.1053424/page-2#post-99969166";
+        let post_text = scrape_sb_post_text(post_url).unwrap();
+        assert_eq!(post_text.is_empty(), false);
+    }
+    #[test]
+    fn test_sb_post_scraping_3(){
+        let post_url = "https://forums.spacebattles.com/threads/a-bad-name-worm-oc-the-gamer.500626/page-412#post-106550411";
+        let post_text = scrape_sb_post_text(post_url).unwrap();
+        assert_eq!(post_text.is_empty(), false);
+    }
+    #[test]
     fn test_update_and_get_threadmarks_1() {
         let mut story = SBStory::new("https://forums.spacebattles.com/threads/omnissiah-vult-a-story-of-ashes-and-empire-wh40k.1053424/page-2#post-99969166").expect("Failed to create SBStory");
         story.update_threadmarks().expect("Failed to update threadmarks");
@@ -183,5 +194,5 @@ mod tests {
         let mut story = SBStory::new("https://forums.spacebattles.com/threads/have-you-come-to-meet-your-match-a-young-justice-kryptonian-si.1184788/").expect("Failed to create SBStory");
         story.update_threadmarks().expect("Failed to update threadmarks");
         assert_eq!(story.get_threadmarks().len() != 0, true);
-    }*/
+    }
 }
