@@ -7,6 +7,6 @@ The main reason I made a new library instead of just using one of the ten or so 
 # To-do:
 - [X] Get threadmark list from RSS feed
 - [X] Parse threadmarks from RSS feed
-- [ ] Scrape text/image/markdown data from each threadmark (probably will just end up copying the HTML over at this rate)
+- [X] Add requesting system to query each threadmark for updates
 - [ ] ???
 - [ ] Profit
